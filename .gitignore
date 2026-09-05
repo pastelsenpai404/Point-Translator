@@ -1,0 +1,44 @@
+# CMake and compiler output
+/build*/
+/out/
+/cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+*.obj
+*.o
+*.pdb
+*.ilk
+*.idb
+*.exe
+*.dll
+*.lib
+*.exp
+
+# Local runtime configuration and credentials
+config.ini
+*.local.ini
+.env
+.env.*
+!.env.example
+
+# Visual Studio / VS Code
+/.vs/
+/.vscode/
+*.sln.docstates
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# Logs, temporary files, and crash dumps
+*.log
+*.tmp
+*.temp
+*.dmp
+*.stackdump
+~$*
+Thumbs.db
+Desktop.ini
