@@ -32,6 +32,19 @@ function Find-CMakeExecutable {
     return $null
 }
 
+function Close-TranslatorGracefully {
+    param([string]$Helper, [string]$Target)
+    $running = @(Get-Process -Name 'ThaiKaraokeOverlay' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -eq $Target })
+    if ($running.Count -eq 0) { return }
+    Write-Host 'กำลังขอให้โปรแกรมเดิมปิดตามปกติ...' -ForegroundColor Cyan
+    $close = Start-Process -FilePath $Helper -ArgumentList ('--close-existing "' + $Target + '"') `
+        -WindowStyle Hidden -Wait -PassThru
+    if ($close.ExitCode -ne 0) {
+        throw "โปรแกรมเดิมยังไม่ปิด (exit code $($close.ExitCode)) กรุณารอการแปลหรือปิดหน้าตั้งค่า แล้วลองใหม่ ไฟล์เดิมยังไม่ถูกแทนที่"
+    }
+}
+
 function Find-OllamaExecutable {
     $command = Get-Command -Name 'ollama.exe' -ErrorAction SilentlyContinue
     if ($command) {
@@ -212,14 +225,7 @@ Visual Studio 2022 Build Tools พร้อมเครื่องมือ C++
                 throw "Build สำเร็จแต่ไม่พบโปรแกรมรุ่นใหม่: $rebuiltExecutable"
             }
 
-            $overlayProcesses = @(Get-Process -Name 'ThaiKaraokeOverlay' -ErrorAction SilentlyContinue)
-            foreach ($overlayProcess in $overlayProcesses) {
-                if ($overlayProcess.Path -eq $executable) {
-                    Write-Host 'Build สำเร็จแล้ว กำลังบังคับปิด Overlay ตัวเดิม...' -ForegroundColor Cyan
-                    $overlayProcess | Stop-Process -Force
-                    $overlayProcess | Wait-Process -ErrorAction SilentlyContinue
-                }
-            }
+            Close-TranslatorGracefully -Helper $rebuiltExecutable -Target $executable
 
             $releaseDirectory = Split-Path -Parent $executable
             New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
@@ -284,19 +290,9 @@ Visual Studio 2022 Build Tools พร้อมเครื่องมือ C++
 "@
     }
 
-    $existingProcesses = @(Get-Process -Name 'ThaiKaraokeOverlay' -ErrorAction SilentlyContinue)
-    foreach ($existingProcess in $existingProcesses) {
-        if ($existingProcess.Path -eq $executable) {
-            Write-Host 'พบ Overlay รุ่นเดิม กำลังบังคับปิดและเปิดใหม่...' -ForegroundColor Cyan
-            $existingProcess | Stop-Process -Force
-            $existingProcess | Wait-Process -ErrorAction SilentlyContinue
-        }
-        else {
-            Write-Warning "พบโปรเซสชื่อ ThaiKaraokeOverlay จากตำแหน่งอื่น จึงไม่ปิด: $($existingProcess.Path)"
-        }
-    }
+    Close-TranslatorGracefully -Helper $executable -Target $executable
 
-    Start-Process -FilePath $executable -WorkingDirectory (Split-Path -Parent $executable)
+    Start-Process -FilePath $executable -WorkingDirectory (Split-Path -Parent $executable) -WindowStyle Hidden
 
     Write-Host ''
     Write-Host 'เปิด Thai Karaoke Overlay เรียบร้อยแล้ว' -ForegroundColor Green

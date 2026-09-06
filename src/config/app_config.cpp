@@ -62,6 +62,9 @@ AppConfig LoadAppConfig() {
         const auto value = Trim(line.substr(equals + 1));
         if (key == L"api_base") config.apiBase = value;
         else if (key == L"api_key") config.apiKey = value;
+        else if (key == L"source_language" && (value == L"zh" || value == L"en" || value == L"th")) config.sourceLanguage = value;
+        else if (key == L"target_language" && (value == L"zh" || value == L"en" || value == L"th")) config.targetLanguage = value;
+        else if (key == L"translation_engine" && (value == L"ai" || value == L"argos")) config.translationEngine = value;
         else if (key == L"model") config.model = value;
         else if (key == L"translate_hotkey") config.translateKey = ParseHotkey(value, 'T');
         else if (key == L"ocr_hotkey") config.ocrKey = ParseHotkey(value, 'O');
@@ -94,6 +97,9 @@ bool SaveAppConfig(const AppConfig& config, std::wstring& error) {
     std::wostringstream content;
     content << L"# Thai Karaoke Overlay configuration\n"
             << L"api_base=" << config.apiBase << L"\n"
+            << L"source_language=" << config.sourceLanguage << L"\n"
+            << L"target_language=" << config.targetLanguage << L"\n"
+            << L"translation_engine=" << config.translationEngine << L"\n"
             << L"model=" << config.model << L"\n"
             << L"translate_hotkey=" << static_cast<wchar_t>(config.translateKey) << L"\n"
             << L"ocr_hotkey=" << static_cast<wchar_t>(config.ocrKey) << L"\n"

@@ -1,6 +1,8 @@
 # CMake and compiler output
 /build*/
 /out/
+/.argos-venv/
+__pycache__/
 /cmake-build-*/
 CMakeCache.txt
 CMakeFiles/

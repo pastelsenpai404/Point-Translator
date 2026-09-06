@@ -1,5 +1,6 @@
 #include "app/overlay_application.h"
 #include "app/settings_window.h"
+#include "app/workspace_window.h"
 
 #include "config/app_config.h"
 #include "core/models.h"
@@ -38,6 +39,7 @@ constexpr UINT kMenuTranslate = 1001;
 constexpr UINT kMenuExit = 1002;
 constexpr UINT kMenuOcr = 1003;
 constexpr UINT kMenuSettings = 1004;
+constexpr UINT kMenuWorkspace = 1005;
 constexpr UINT_PTR kAutoHideTimer = 1;
 constexpr int kOverlayWidth = 980;
 constexpr int kOverlayHeight = 680;
@@ -49,6 +51,7 @@ HWND g_captureWindow = nullptr;
 NOTIFYICONDATAW g_tray{};
 Translation g_translation;
 std::atomic_bool g_busy = false;
+ULONGLONG g_closeDeadline = 0;
 HFONT g_titleFont = nullptr;
 HFONT g_bodyFont = nullptr;
 HFONT g_smallFont = nullptr;
@@ -148,16 +151,18 @@ void PositionAndShowOverlay() {
     InvalidateRect(g_window, nullptr, TRUE);
 }
 
-void StartTranslation(bool copySelection) {
+void StartTranslation(bool copySelection, std::wstring typed = {}) {
     if (g_busy.exchange(true)) return;
     KillTimer(g_window, kAutoHideTimer);
     std::wstring selected;
-    if (copySelection) selected = CaptureSelectedText();
+    WorkspaceBusy(true);
+    if (!typed.empty()) selected = std::move(typed);
+    else if (copySelection) selected = CaptureSelectedText();
     else ReadClipboardText(selected);
     selected = Trim(selected);
     g_translation = {};
     g_translation.original = selected.empty() ? L"No selected text" : selected;
-    PositionAndShowOverlay();
+    if (!WorkspaceVisible()) PositionAndShowOverlay();
     const AppConfig config = g_config;
 
     std::thread([selected, copySelection, config] {
@@ -177,7 +182,12 @@ void StartTranslation(bool copySelection) {
 }
 
 void StartOcrTranslation(const RECT& rectangle) {
-    const AppConfig config = g_config;
+    AppConfig config = g_config;
+    if (config.ocrLanguage == L"auto") {
+        if (config.sourceLanguage == L"zh") config.ocrLanguage = L"zh-Hans-CN";
+        else if (config.sourceLanguage == L"en") config.ocrLanguage = L"en-US";
+        else if (config.sourceLanguage == L"th") config.ocrLanguage = L"th-TH";
+    }
     std::thread([rectangle, config] {
         // The capture window must be fully hidden before copying screen pixels.
         Sleep(120);
@@ -224,6 +234,7 @@ void StartOcrTranslation(const RECT& rectangle) {
 
 void BeginOcrCapture() {
     if (g_busy.exchange(true)) return;
+    WorkspaceBusy(true);
     KillTimer(g_window, kAutoHideTimer);
     ShowWindow(g_window, SW_HIDE);
     g_selectingCapture = false;
@@ -341,16 +352,18 @@ void PaintOverlay(HWND window) {
                       RGB(255, 125, 125), RGB(245, 245, 248));
     } else {
         if (g_config.showOriginal) {
-            DrawTextBlock(dc, L"ORIGINAL", g_translation.original, content,
-                          RGB(143, 156, 176), RGB(238, 241, 246));
+            DrawTextBlock(dc, L"ORIGINAL", g_translation.original +
+                          (g_translation.originalPinyin.empty()?L"":L"\nPinyin: "+g_translation.originalPinyin), content,
+                          RGB(143, 156, 176), RGB(238, 241, 246), g_translation.originalPinyin.empty()?42:72);
         }
         if (g_config.showKaraoke) {
             DrawTextBlock(dc, L"คำอ่านคาราโอเกะภาษาไทย",
                           g_translation.karaoke.empty() ? L"กำลังแปล…" : g_translation.karaoke,
                           content, RGB(92, 220, 175), RGB(255, 255, 255));
         }
-        DrawTextBlock(dc, L"ภาษาไทย", g_translation.thai, content,
-                      RGB(111, 180, 255), RGB(255, 255, 255));
+        DrawTextBlock(dc, (L"คำแปล · " + g_translation.targetLanguage).c_str(), g_translation.translated +
+                      (g_translation.translatedPinyin.empty()?L"":L"\nPinyin: "+g_translation.translatedPinyin), content,
+                      RGB(111, 180, 255), RGB(255, 255, 255), g_translation.translatedPinyin.empty()?42:72);
         if (g_config.showExplanation && !g_translation.explanation.empty()) {
             DrawTextBlock(dc, L"อธิบายประโยค", g_translation.explanation, content,
                           RGB(238, 191, 92), RGB(235, 237, 242), 48);
@@ -363,7 +376,7 @@ void PaintOverlay(HWND window) {
     SelectObject(dc, g_titleFont);
     SetTextColor(dc, RGB(126, 134, 148));
     RECT hint{28, client.bottom - 38, client.right - 28, client.bottom - 12};
-    DrawTextW(dc, L"Mouse wheel: more words    Ctrl+Alt+T: text    Ctrl+Alt+O: OCR    Esc: hide",
+    DrawTextW(dc, L"Mouse wheel: more words    |    Esc: hide",
               -1, &hint, DT_RIGHT | DT_SINGLELINE | DT_NOPREFIX);
     EndPaint(window, &paint);
 }
@@ -423,6 +436,7 @@ void ShowTrayMenu(HWND window) {
     POINT point{};
     GetCursorPos(&point);
     HMENU menu = CreatePopupMenu();
+    AppendMenuW(menu, MF_STRING, kMenuWorkspace, L"Point Translator / History / Replies");
     AppendMenuW(menu, MF_STRING, kMenuTranslate, L"Translate clipboard text");
     AppendMenuW(menu, MF_STRING, kMenuOcr, L"Capture text from screen\tCtrl+Alt+O");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
@@ -475,6 +489,8 @@ LRESULT CALLBACK CaptureWindowProcedure(HWND window, UINT message,
                     StartOcrTranslation(rectangle);
                 } else {
                     g_busy = false;
+                    WorkspaceBusy(false);
+                    ShowWorkspace();
                 }
             }
             return 0;
@@ -484,6 +500,8 @@ LRESULT CALLBACK CaptureWindowProcedure(HWND window, UINT message,
                 if (GetCapture() == window) ReleaseCapture();
                 ShowWindow(window, SW_HIDE);
                 g_busy = false;
+                WorkspaceBusy(false);
+                ShowWorkspace();
             }
             return 0;
         case WM_RBUTTONDOWN:
@@ -491,6 +509,8 @@ LRESULT CALLBACK CaptureWindowProcedure(HWND window, UINT message,
             if (GetCapture() == window) ReleaseCapture();
             ShowWindow(window, SW_HIDE);
             g_busy = false;
+            WorkspaceBusy(false);
+            ShowWorkspace();
             return 0;
         case WM_PAINT: {
             PAINTSTRUCT paint{};
@@ -531,6 +551,20 @@ LRESULT CALLBACK CaptureWindowProcedure(HWND window, UINT message,
 
 LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
+        case WM_CLOSE:
+            // Let an in-flight translation finish and preserve any settings draft.
+            // The launcher reports a timeout instead of force-killing the app.
+            if (g_busy || !IsWindowEnabled(window)) {
+                g_closeDeadline = GetTickCount64() + 14000;
+                SetTimer(window, 2, 250, nullptr);
+                return 0;
+            }
+            DestroyWindow(window);
+            return 0;
+        case WM_SIZE:
+            MoveWindow(GetDlgItem(window, kMenuWorkspace), 28,
+                       (std::max)(0, static_cast<int>(HIWORD(lParam)) - 42), 160, 28, TRUE);
+            return 0;
         case WM_PAINT:
             PaintOverlay(window);
             return 0;
@@ -548,6 +582,17 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
             }
             return 0;
         case WM_TIMER:
+            if (wParam == 2) {
+                if (GetTickCount64() >= g_closeDeadline) {
+                    KillTimer(window, 2);
+                    return 0;
+                }
+                if (!g_busy && IsWindowEnabled(window)) {
+                    KillTimer(window, 2);
+                    DestroyWindow(window);
+                }
+                return 0;
+            }
             if (wParam == kAutoHideTimer) {
                 KillTimer(window, kAutoHideTimer);
                 ShowWindow(window, SW_HIDE);
@@ -569,7 +614,8 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
             g_translation = std::move(*completed);
             g_wordScroll = 0;
             g_busy = false;
-            PositionAndShowOverlay();
+            WorkspaceCompleted(g_translation);
+            if (!WorkspaceVisible()) PositionAndShowOverlay();
             if (g_config.autoHideSeconds > 0) {
                 SetTimer(window, kAutoHideTimer,
                          static_cast<UINT>(g_config.autoHideSeconds * 1000), nullptr);
@@ -577,13 +623,14 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
             return 0;
         }
         case kTrayMessage:
-            if (lParam == WM_LBUTTONDBLCLK) OpenSettings();
+            if (lParam == WM_LBUTTONDBLCLK) ShowWorkspace();
             else if (lParam == WM_RBUTTONUP || lParam == WM_CONTEXTMENU) ShowTrayMenu(window);
             return 0;
         case WM_COMMAND:
             if (LOWORD(wParam) == kMenuTranslate) StartTranslation(false);
             else if (LOWORD(wParam) == kMenuOcr) BeginOcrCapture();
             else if (LOWORD(wParam) == kMenuSettings) OpenSettings();
+            else if (LOWORD(wParam) == kMenuWorkspace) { ShowWindow(window, SW_HIDE); ShowWorkspace(); }
             else if (LOWORD(wParam) == kMenuExit) DestroyWindow(window);
             return 0;
         case WM_DESTROY:
@@ -610,9 +657,19 @@ bool AddTrayIcon(HWND window) {
 }  // namespace
 
 int RunOverlayApplication(HINSTANCE instance) {
+    HANDLE singleInstance = CreateMutexW(nullptr, FALSE, L"Local\\PointTranslatorApplication");
+    if (!singleInstance) return 1;
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        HWND existing = FindWindowW(L"PointTranslatorWorkspace", nullptr);
+        if (existing) { ShowWindow(existing, SW_RESTORE); SetForegroundWindow(existing); }
+        CloseHandle(singleInstance);
+        return 0;
+    }
+    winrt::init_apartment(winrt::apartment_type::single_threaded);
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     g_instance = instance;
     g_config = LoadAppConfig();
+    StartArgosService();
     g_titleFont = CreateFontW(-15, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
                               DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                               CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
@@ -657,6 +714,13 @@ int RunOverlayApplication(HINSTANCE instance) {
     SetWindowRgn(g_window, CreateRoundRectRgn(0, 0, kOverlayWidth, kOverlayHeight,
                                               24, 24), TRUE);
     AddTrayIcon(g_window);
+    InitializeWorkspace(instance, g_config,
+        [](std::wstring text) { StartTranslation(false, std::move(text)); },
+        [] { BeginOcrCapture(); }, [] { OpenSettings(); });
+    CreateWindowW(L"BUTTON", L"History / Replies", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                  28, kOverlayHeight - 42, 160, 28, g_window,
+                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(kMenuWorkspace)), instance, nullptr);
+    ShowWorkspace();
 
     if (!RegisterApplicationHotkeys(g_config)) {
         MessageBoxW(nullptr,
@@ -667,12 +731,14 @@ int RunOverlayApplication(HINSTANCE instance) {
 
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
+        if (WorkspaceMessage(message)) continue;
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }
     if (g_titleFont) DeleteObject(g_titleFont);
     if (g_bodyFont) DeleteObject(g_bodyFont);
     if (g_smallFont) DeleteObject(g_smallFont);
+    CloseHandle(singleInstance);
     return static_cast<int>(message.wParam);
 }
 

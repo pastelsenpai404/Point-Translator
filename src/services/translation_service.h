@@ -5,6 +5,7 @@
 #include <string>
 
 namespace thai_overlay {
+void StartArgosService();
 
 Translation Translate(const AppConfig& config, const std::wstring& original,
                       bool chooseOcrCandidate = false);

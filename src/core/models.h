@@ -6,6 +6,9 @@
 namespace thai_overlay {
 
 struct AppConfig {
+    std::wstring sourceLanguage = L"zh";
+    std::wstring targetLanguage = L"th";
+    std::wstring translationEngine = L"ai";
     std::wstring apiBase = L"https://api.openai.com";
     std::wstring apiKey;
     std::wstring model = L"gpt-4.1-mini";
@@ -23,6 +26,12 @@ struct AppConfig {
 };
 
 struct Translation {
+    std::wstring originalPinyin;
+    std::wstring translatedPinyin;
+    std::wstring sourceLanguage = L"auto";
+    std::wstring targetLanguage = L"th";
+    std::wstring engine = L"ai";
+    std::wstring translated;
     std::wstring original;
     std::wstring karaoke;
     std::wstring thai;
@@ -35,6 +44,13 @@ struct Translation {
         std::wstring note;
     };
     std::vector<WordExplanation> words;
+    struct Reply {
+        std::wstring tone;
+        std::wstring text;
+        std::wstring thai;
+        std::wstring pinyin;
+    };
+    std::vector<Reply> replies;
     std::wstring error;
 };
 

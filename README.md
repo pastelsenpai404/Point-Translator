@@ -25,8 +25,11 @@ restarts an existing process, and starts the overlay. To force a clean rebuild
 of the executable, use `-Rebuild`.
 
 With `-Rebuild`, the existing overlay keeps running while CMake builds into a
-staging directory. Only after a successful build does the script force-stop the
-old process, replace the executable, and launch the new version.
+staging directory. Only after a successful build does the new executable request
+a normal close of the old application, verify it has exited, replace the executable,
+and launch the new version. It matches the exact executable path and never force-kills
+the process. If shutdown does not finish within 15 seconds, the update stops and the
+old executable remains intact. Finish any translation or close Settings before retrying.
 
 If the C++ build tools are not installed, this command installs the required
 Visual Studio 2022 Build Tools workload through WinGet and then builds the app:
@@ -68,13 +71,61 @@ command without `-UseLocalAI`.
 4. Use the mouse wheel when the word-by-word table has more rows.
 5. Press **Esc** to hide it. Press **Ctrl+Alt+Q** to exit.
 
-The app sits in the notification area. Double-click its icon to open Settings,
+The app sits in the notification area. Double-click its icon to open Point Translator,
 or right-click it for the full menu.
+
+## Point Translator workspace
+
+Choose the source and target above the input: **จีน (zh)**, **อังกฤษ (en)**,
+or **ไทย (th)**. The **⇄** button swaps them. Selections persist and also apply to
+clipboard hotkeys and screen OCR. OCR requires the corresponding Windows OCR language.
+The main translation and copy button use the selected target; pronunciation and
+learning explanations stay in Thai. Suggested replies use the selected target language.
+History stores both languages, the target translation, and the engine; older Thai history remains readable.
+
+Choose **AI** to use the configured model for everything, or **Argos + AI** for an
+Argos translation with AI-generated reading aids and replies. If AI is unavailable,
+the Argos translation is still displayed. Chinese ↔ English and English ↔ Thai use
+direct models; Chinese ↔ Thai uses English as an intermediate language.
+
+To install Argos and its four language packages once:
+
+```powershell
+.\Start-Argos.ps1 -Install -Python 'C:\path\to\python.exe'
+```
+
+Python 3.10+ is required. Dependencies are isolated in `.argos-venv`; initial setup
+downloads packages and models. The application starts the installed loopback bridge
+automatically on subsequent launches. `Start-Argos.ps1` can also start it manually.
+The bridge binds only to `127.0.0.1:18765`. Argos runs locally; AI reading aids and
+replies use your configured local/cloud provider. The bridge remains available after
+closing the UI and does not log translation text. Integration uses the published
+[Argos Translate library](https://github.com/argosopentech/argos-translate).
+
+The app now opens a resizable workspace with Thai labels. Type or paste text and
+choose **แปลข้อความ**, or use **จับภาพ OCR** for screen text. The three result tabs
+show the full translation and pronunciation, suggested replies, and word explanations.
+Long results can be scrolled and selected for copying.
+
+- **คำตอบแนะนำ 3 แบบ** asks the configured model for a polite/professional reply,
+  a friendly/casual reply, and a clarifying question. Each includes the target-language
+  reply and its Thai meaning. **คัดลอกคำตอบ** copies only the target-language reply;
+  the app never sends a reply automatically. Missing suggestions are explicitly shown.
+- The history sidebar searches original, target and Thai text. Selecting an entry restores
+  its translation, words and replies without another API request.
+- The latest 500 successful translations are saved in
+  `%LOCALAPPDATA%\PointTranslator\history.json`, including local timestamps. This is
+  an unencrypted local JSON file. Use **ลบรายการ** or **ล้างประวัติ** to remove entries.
+  Read/write failures are displayed; unreadable history is preserved instead of overwritten.
+- The compact overlay and existing hotkeys remain available. Choose **History / Replies**
+  on the overlay, or double-click the tray icon, to return to the workspace. Closing the
+  workspace keeps the app in the tray; use the configured quit hotkey or tray **Exit** to quit.
+- Only one app instance runs per Windows session to avoid conflicting history writes.
 
 ## Settings UI
 
-Double-click the notification-area icon, or right-click it and choose
-**Settings...** to open the five-tab Control Center:
+Click **ตั้งค่า** in the workspace, or right-click the notification-area icon and choose
+**Settings...** to open the Thai Settings window with five sidebar sections:
 
 - **Provider** — API URL, model, local/cloud status, and API key
 - **Reading** — original text, Thai pronunciation, explanation, and word table
@@ -82,14 +133,19 @@ Double-click the notification-area icon, or right-click it and choose
 - **Appearance** — opacity, screen position, and automatic hiding
 - **Shortcuts** — translate, screen OCR, and exit hotkeys
 
+Settings includes Ollama/OpenAI presets, a show/hide API-key button, an editable
+OCR-language dropdown, Thai position labels, and reset buttons for appearance and
+shortcuts. Switching provider presets clears the draft key when the service changes.
+The footer indicates edits; Cancel discards them. Invalid fields reveal their section.
+The window scales its controls and fonts to the monitor DPI and available work area.
+
 Changes are validated, saved, and applied immediately. The API key is stored in
 the current Windows user's environment rather than in `config.ini`.
 
 Screen capture OCR uses the lightweight OCR engine built into Windows. With the
-default `ocr_language=auto`, it runs the installed Windows OCR languages and
-lets the configured AI choose the most coherent result before translating. Set
-a language tag such as `zh-Hans-CN` in `config.ini` only when you want to force
-one OCR language.
+default `ocr_language=auto`, it selects the Windows OCR language matching the source
+language in the workspace. That OCR language must be installed in Windows. Set a
+language tag such as `zh-Hans-CN` in `config.ini` to override this selection explicitly.
 
 ## Build
 
@@ -118,6 +174,16 @@ build\Release\ThaiKaraokeOverlay.exe
 The program is organized into application, configuration, core, and service
 layers. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for module ownership
 and dependency rules.
+
+### Service integration checks
+
+Configure with `-DPOINT_TRANSLATOR_TESTS=ON` and build Release. Run
+`node tests/mock_provider.cjs` in one terminal, then run
+`build\Release\PointTranslatorServiceTests.exe <new-absolute-test-json-path> http://127.0.0.1:18764`.
+Use a new path inside the build directory, never your real history file. The checks cover
+three replies, Thai/Chinese/emoji and escaped text persistence, clearing, corrupt-file
+preservation, HTTP errors, and providers that omit suggestions. They use a local fixture
+and do not require an API key or call an external model.
 
 ## Configure
 

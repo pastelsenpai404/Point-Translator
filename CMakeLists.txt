@@ -8,6 +8,8 @@ set(THAI_OVERLAY_SOURCES
     src/app/overlay_application.cpp
     src/app/settings_window.h
     src/app/settings_window.cpp
+    src/app/workspace_window.cpp
+    src/services/history_service.cpp
     src/config/app_config.h
     src/config/app_config.cpp
     src/core/models.h
@@ -43,6 +45,7 @@ target_link_libraries(ThaiKaraokeOverlay PRIVATE
     gdi32
     shell32
     windowsapp
+    ole32
 )
 
 add_custom_command(TARGET ThaiKaraokeOverlay POST_BUILD
@@ -57,3 +60,14 @@ endif()
 
 install(TARGETS ThaiKaraokeOverlay RUNTIME DESTINATION .)
 install(FILES config.example.ini DESTINATION .)
+
+option(POINT_TRANSLATOR_TESTS "Build service integration tests" OFF)
+if(POINT_TRANSLATOR_TESTS)
+    add_executable(PointTranslatorServiceTests tests/service_tests.cpp
+        src/services/history_service.cpp src/services/translation_service.cpp src/core/text.cpp)
+    target_compile_features(PointTranslatorServiceTests PRIVATE cxx_std_20)
+    target_include_directories(PointTranslatorServiceTests PRIVATE src)
+    target_compile_definitions(PointTranslatorServiceTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(PointTranslatorServiceTests PRIVATE /W4 /utf-8)
+    target_link_libraries(PointTranslatorServiceTests PRIVATE windowsapp shell32 ole32 winhttp)
+endif()
