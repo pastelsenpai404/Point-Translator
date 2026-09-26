@@ -154,10 +154,28 @@ void PositionAndShowOverlay() {
     InvalidateRect(g_window, nullptr, TRUE);
 }
 
+void AddAiModeChoice(const AppConfig& config, Translation& result) {
+    if (!config.layaEnabled || config.translationEngine != L"ai" ||
+        !result.error.empty() || result.original.empty() || result.translated.empty() ||
+        config.sourceLanguage == config.targetLanguage) return;
+    AppConfig argos = config;
+    argos.translationEngine = L"argos";
+    const auto alternative = Translate(argos, result.original, false, false);
+    if (!alternative.error.empty() || alternative.translated.empty() ||
+        alternative.translated == result.translated) return;
+    result.alternativeTranslated = alternative.translated;
+    result.alternativeEngine = L"Argos";
+    const auto choice = SelectTranslationWithLaya(
+        config, result.original, alternative.translated, result.translated);
+    if (choice == LayaTranslationChoice::Argos) result.layaTranslationChoice = L"Argos";
+    else if (choice == LayaTranslationChoice::Ai) result.layaTranslationChoice = L"AI";
+}
+
 Translation TranslateWithAnalysis(const AppConfig& config, const std::wstring& original,
                                   bool chooseOcrCandidate = false) {
     if (!config.layaEnabled || chooseOcrCandidate) {
         auto result = Translate(config, original, chooseOcrCandidate);
+        AddAiModeChoice(config, result);
         AnalyzeWithLaya(config, result);
         return result;
     }
@@ -179,6 +197,7 @@ Translation TranslateWithAnalysis(const AppConfig& config, const std::wstring& o
         return result;
     });
     auto result = Translate(config, original);
+    AddAiModeChoice(config, result);
     const auto laya = analysis.get();
     if (result.error.empty()) {
         result.layaIntent = laya.layaIntent;
@@ -421,6 +440,13 @@ void PaintOverlay(HWND window) {
         DrawTextBlock(dc, (L"คำแปล · " + g_translation.targetLanguage).c_str(), g_translation.translated +
                       (g_translation.translatedPinyin.empty()?L"":L"\nPinyin: "+g_translation.translatedPinyin), content,
                       RGB(111, 180, 255), RGB(255, 255, 255), g_translation.translatedPinyin.empty()?42:72);
+        if (!g_translation.layaTranslationChoice.empty() &&
+            !g_translation.alternativeTranslated.empty()) {
+            DrawTextBlock(dc, L"Laya · คำแนะนำ",
+                          L"คาดว่าคำแปล " + g_translation.layaTranslationChoice +
+                          L" เหมาะกว่า · เปิดหน้าหลักเพื่อเทียบอีกคำแปล",
+                          content, RGB(173, 195, 255), RGB(235, 237, 242), 48);
+        }
         if (!g_translation.layaIntent.empty()) {
             DrawTextBlock(dc, L"Laya · ผลวิเคราะห์เบื้องต้น",
                           L"เจตนา: " + g_translation.layaIntent + L" · ความเร่งด่วน: " + g_translation.layaUrgency,

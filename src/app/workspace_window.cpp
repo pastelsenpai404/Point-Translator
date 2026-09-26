@@ -22,7 +22,8 @@ std::wstring storageError;
 std::function<void(std::wstring)> translateAction;
 std::function<void()> captureAction, settingsAction;
 constexpr int TranslateId=101, CaptureId=102, SettingsId=103, SearchId=104,
-    HistoryId=105, TabsId=106, CopyId=107, DeleteId=108, ClearId=109;
+    HistoryId=105, TabsId=106, CopyId=107, DeleteId=108, ClearId=109,
+    CopyAlternativeId=110;
 int Scale(int value) { return MulDiv(value, static_cast<int>(GetDpiForWindow(window)), 96); }
 const wchar_t* languageCodes[] = {L"zh",L"en",L"th"};
 const wchar_t* languageNames[] = {L"จีน",L"อังกฤษ",L"ไทย"};
@@ -64,7 +65,7 @@ void RefreshHistory() {
     const auto query=Lower(Text(search));
     for(size_t i=0;i<entries.size();++i) {
         const auto& entry=entries[i];
-        if(!query.empty() && Lower(entry.translation.original+L" "+entry.translation.translated+L" "+entry.translation.thai).find(query)==std::wstring::npos) continue;
+        if(!query.empty() && Lower(entry.translation.original+L" "+entry.translation.translated+L" "+entry.translation.alternativeTranslated+L" "+entry.translation.thai).find(query)==std::wstring::npos) continue;
         auto preview=entry.translation.original.substr(0,70);
         std::replace(preview.begin(),preview.end(),L'\n',L' ');
         std::replace(preview.begin(),preview.end(),L'\r',L' ');
@@ -78,6 +79,7 @@ void Display() {
     const int tab=TabCtrl_GetCurSel(tabs);
     ShowWindow(output,tab==1?SW_HIDE:SW_SHOW);
     ShowWindow(GetDlgItem(window,CopyId),tab==1?SW_HIDE:SW_SHOW);
+    ShowWindow(GetDlgItem(window,CopyAlternativeId),tab==0 && !current.alternativeTranslated.empty()?SW_SHOW:SW_HIDE);
     for(int i=0;i<3;++i) {
         ShowWindow(replyLabels[i],tab==1?SW_SHOW:SW_HIDE);
         ShowWindow(replyEdits[i],tab==1?SW_SHOW:SW_HIDE);
@@ -96,12 +98,21 @@ void Display() {
         if(value.empty()) value=busy?L"กำลังเตรียมคำอธิบายรายคำ…":L"โมเดลไม่ได้ส่งคำอธิบายรายคำสำหรับข้อความนี้";
     } else {
         value=L"ต้นฉบับ ("+LanguageName(current.sourceLanguage)+L")\r\n"+current.original+PinyinLine(current.originalPinyin)+L"\r\n\r\nคำแปล ("+LanguageName(current.targetLanguage)+L") · "+current.engine+L"\r\n"+current.translated+PinyinLine(current.translatedPinyin);
+        if (!current.alternativeTranslated.empty()) {
+            if (!current.layaTranslationChoice.empty())
+                value+=L"\r\n\r\nLaya คาดว่าคำแปล "+current.layaTranslationChoice+L" เหมาะกว่า · โปรดเทียบความหมายก่อนใช้";
+            else value+=L"\r\n\r\nLaya ยังไม่ได้เลือกคำแปล · โปรดเทียบความหมายเอง";
+            value+=L"\r\n\r\nอีกคำแปล ("+
+                (current.alternativeEngine.empty()?std::wstring(L"AI"):current.alternativeEngine)+
+                L")\r\n"+current.alternativeTranslated;
+        }
         if (!current.layaIntent.empty()) value+=L"\r\n\r\nLaya คาดว่า · เจตนา: "+current.layaIntent+L" · ความเร่งด่วน: "+current.layaUrgency;
         else if (!current.layaStatus.empty()) value+=L"\r\n\r\n"+current.layaStatus;
         value+=L"\r\n\r\nคำอ่านภาษาไทย\r\n"+(busy && current.karaoke.empty()?L"กำลังเตรียม…":current.karaoke)+L"\r\n\r\nบริบทและความหมาย\r\n"+(busy && current.explanation.empty()?L"กำลังเตรียม…":current.explanation);
     }
     SetWindowTextW(output,value.c_str());
     EnableWindow(GetDlgItem(window,CopyId),!current.translated.empty());
+    EnableWindow(GetDlgItem(window,CopyAlternativeId),!current.alternativeTranslated.empty());
 }
 void Layout() {
     if (!status) return;
@@ -129,6 +140,7 @@ void Layout() {
     Place(tabs,x,294,right,32);
     Place(output,x,338,right,h-438);
     Place(GetDlgItem(window,CopyId),x,h-90,170,32);
+    Place(GetDlgItem(window,CopyAlternativeId),x+182,h-90,190,32);
     int cardHeight=(h-408)/3;
     for(int i=0;i<3;++i) {
         int y=338+i*cardHeight;
@@ -209,6 +221,7 @@ LRESULT CALLBACK Procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 Status(L"ประวัติ · "+entry.time+L" · อ่านได้โดยไม่เรียก AI ใหม่");
             }
         } else if(id==CopyId) Copy(current.translated);
+        else if(id==CopyAlternativeId) Copy(current.alternativeTranslated);
         else if(id>=300 && id<303 && static_cast<size_t>(id-300)<current.replies.size()) Copy(current.replies[id-300].text);
         else if((id==DeleteId || id==ClearId) && historyReadable) {
             const auto selection=SendMessageW(history,LB_GETCURSEL,0,0);
@@ -275,6 +288,7 @@ void InitializeWorkspace(HINSTANCE instance,AppConfig& config,std::function<void
     output=Control(L"EDIT",L"",WS_TABSTOP|WS_VSCROLL|ES_MULTILINE|ES_AUTOVSCROLL|ES_READONLY,210);
     SendMessageW(output,EM_SETLIMITTEXT,1024*1024,0);
     Control(L"BUTTON",L"คัดลอกคำแปล",WS_TABSTOP,CopyId);
+    Control(L"BUTTON",L"คัดลอกอีกคำแปล",WS_TABSTOP,CopyAlternativeId);
     for(int i=0;i<3;++i) {
         replyLabels[i]=Control(L"STATIC",L"",0,310+i);
         replyEdits[i]=Control(L"EDIT",L"",WS_TABSTOP|WS_VSCROLL|ES_MULTILINE|ES_AUTOVSCROLL|ES_READONLY,320+i);

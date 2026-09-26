@@ -1,6 +1,7 @@
 #include "services/translation_service.h"
 
 #include "core/text.h"
+#include "services/laya_service.h"
 
 #include <windows.h>
 #include <winhttp.h>
@@ -383,6 +384,19 @@ Translation Translate(const AppConfig& config, const std::wstring& original,
             if(result.translatedPinyin.empty() && result.translated==learning.translated)
                 result.translatedPinyin=learning.translatedPinyin;
             result.explanation = learning.explanation; result.words = learning.words; result.replies = learning.replies;
+            if (!learning.translated.empty() && learning.translated != result.translated) {
+                result.alternativeTranslated = learning.translated;
+                result.alternativeEngine = L"AI";
+                const auto choice = SelectTranslationWithLaya(
+                    config, original, result.translated, learning.translated);
+                if (choice == LayaTranslationChoice::Ai) {
+                    result.layaTranslationChoice = L"AI";
+                } else if (choice == LayaTranslationChoice::Argos) {
+                    result.layaTranslationChoice = L"Argos";
+                }
+            }
+            if (config.targetLanguage == L"th")
+                result.thai = result.translated;
         } else result.explanation = L"แปลด้วย Argos แล้ว แต่ AI ไม่พร้อมสำหรับคำอ่านและคำตอบแนะนำ";
         if ((config.sourceLanguage == L"zh" && config.targetLanguage == L"th") ||
             (config.sourceLanguage == L"th" && config.targetLanguage == L"zh"))

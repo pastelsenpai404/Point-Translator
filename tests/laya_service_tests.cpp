@@ -20,6 +20,14 @@ int wmain() {
         std::cerr << "Laya result: " << thai_overlay::WideToUtf8(result.layaStatus) << '\n';
         return 1;
     }
-    std::cout << "PASS: local Laya HTTP response and disabled mode\n";
+    config.targetLanguage = L"zh";
+    const auto choice = thai_overlay::SelectTranslationWithLaya(config,
+        L"Hello", L"你好", L"您好");
+    if (choice != thai_overlay::LayaTranslationChoice::Argos &&
+        choice != thai_overlay::LayaTranslationChoice::Ai) {
+        std::cerr << "Laya translation choice unavailable\n";
+        return 1;
+    }
+    std::cout << "PASS: local Laya analysis, translation choice and disabled mode\n";
     return 0;
 }

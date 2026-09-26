@@ -13,7 +13,12 @@ from urllib.request import Request, urlopen
 
 
 class FakeRouter:
-    def predict(self, state, questions, lang):
+    def predict(self, state, questions, lang=None, model=None):
+        if isinstance(state, dict):
+            assert state == {"source": "你好", "source_lang": "zh", "target_lang": "en"}
+            assert questions["best"]["criteria"] == {"argos": "Hello", "ai": "Hi"}
+            assert model == "multilingual"
+            return {"answers": {"best": {"choice": "ai"}}}
         assert state == "你好，今天有空吗？"
         assert lang == "zh"
         assert set(questions) == {"intent", "urgency"}
@@ -55,6 +60,19 @@ class BridgeTests(unittest.TestCase):
         body = json.dumps({"text": "", "lang": "en"}).encode()
         with self.assertRaises(HTTPError) as error:
             urlopen(Request(self.url + "/analyze", body))
+        self.assertEqual(error.exception.code, 400)
+
+    def test_selects_one_supplied_translation(self):
+        body = json.dumps({"source": "你好", "lang": "zh", "target": "en",
+                           "argos": "Hello", "ai": "Hi"}).encode()
+        with urlopen(Request(self.url + "/select-translation", body)) as response:
+            self.assertEqual(json.load(response), {"choice": "ai"})
+
+    def test_rejects_missing_translation_candidate(self):
+        body = json.dumps({"source": "你好", "lang": "zh", "target": "en",
+                           "argos": "Hello"}).encode()
+        with self.assertRaises(HTTPError) as error:
+            urlopen(Request(self.url + "/select-translation", body))
         self.assertEqual(error.exception.code, 400)
 
 

@@ -47,6 +47,9 @@ std::vector<HistoryEntry> LoadHistory(std::wstring& error, std::filesystem::path
             t.targetLanguage = object.GetNamedString(L"target_language", L"th");
             t.engine = object.GetNamedString(L"engine", L"ai");
             t.translated = object.GetNamedString(L"translated", object.GetNamedString(L"thai", L""));
+            t.alternativeTranslated = Get(object, L"alternative_translated");
+            t.alternativeEngine = Get(object, L"alternative_engine");
+            t.layaTranslationChoice = Get(object, L"laya_translation_choice");
             t.original = Get(object, L"original"); t.thai = Get(object, L"thai");
             t.karaoke = Get(object, L"karaoke"); t.explanation = Get(object, L"explanation");
             t.layaIntent = Get(object, L"laya_intent");
@@ -79,6 +82,9 @@ bool SaveHistory(const std::vector<HistoryEntry>& entries, std::wstring& error, 
             Put(object,L"original_pinyin",t.originalPinyin); Put(object,L"translated_pinyin",t.translatedPinyin);
             Put(object,L"source_language",t.sourceLanguage); Put(object,L"target_language",t.targetLanguage);
             Put(object,L"engine",t.engine); Put(object,L"translated",t.translated);
+            Put(object,L"alternative_translated",t.alternativeTranslated);
+            Put(object,L"alternative_engine",t.alternativeEngine);
+            Put(object,L"laya_translation_choice",t.layaTranslationChoice);
             Put(object,L"time",entry.time); Put(object,L"original",t.original);
             Put(object,L"thai",t.thai); Put(object,L"karaoke",t.karaoke); Put(object,L"explanation",t.explanation);
             Put(object,L"laya_intent",t.layaIntent); Put(object,L"laya_urgency",t.layaUrgency);

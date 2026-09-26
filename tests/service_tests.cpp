@@ -57,6 +57,9 @@ int wmain(int argc, wchar_t** argv) {
         entries.front().translation.explanation = L"ไทย 中文 😀 \"quote\"\nline\\path";
         entries.front().translation.layaIntent = L"ถามข้อมูล";
         entries.front().translation.layaUrgency = L"ปกติ";
+        entries.front().translation.alternativeTranslated = L"Another translation";
+        entries.front().translation.alternativeEngine = L"Argos";
+        entries.front().translation.layaTranslationChoice = L"AI";
         Require(SaveHistory(entries,error,path), "Save history");
         const auto restored = LoadHistory(error,path);
         Require(error.empty() && restored.size()==1, "Reload history");
@@ -67,6 +70,10 @@ int wmain(int argc, wchar_t** argv) {
         Require(saved.explanation==entries.front().translation.explanation, "Unicode and escaped characters");
         Require(saved.layaIntent==entries.front().translation.layaIntent &&
                 saved.layaUrgency==entries.front().translation.layaUrgency, "Laya history round trip");
+        Require(saved.alternativeTranslated==entries.front().translation.alternativeTranslated &&
+                saved.alternativeEngine==entries.front().translation.alternativeEngine &&
+                saved.layaTranslationChoice==entries.front().translation.layaTranslationChoice,
+                "Translation choice history round trip");
         Require(saved.replies.size()==3 && saved.replies[2].thai==translation.replies[2].thai, "Replies round trip");
         Require(saved.words.size()==1 && saved.words[0].pinyin==translation.words[0].pinyin, "Words round trip");
         Require(SaveHistory({},error,path), "Clear history");

@@ -1,7 +1,17 @@
 """Loopback-only Laya decision service for Point Translator."""
 
 import json
+import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+if __name__ == "__main__" and sys.platform == "win32":
+    import ctypes
+
+    ctypes.windll.kernel32.CreateMutexW.restype = ctypes.c_void_p
+    _mutex = ctypes.windll.kernel32.CreateMutexW(
+        None, False, "Local\\PointTranslatorLayaBridge")
+    if ctypes.windll.kernel32.GetLastError() == 183:
+        sys.exit(0)
 
 from laya import Router
 
@@ -50,7 +60,7 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(404, {"error": "not found"})
 
     def do_POST(self):
-        if self.path != "/analyze":
+        if self.path not in ("/analyze", "/select-translation"):
             self.respond(404, {"error": "not found"})
             return
         try:
@@ -59,6 +69,37 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(413, {"error": "invalid request size"})
                 return
             request = json.loads(self.rfile.read(length))
+            if self.path == "/select-translation":
+                source = request.get("source")
+                argos = request.get("argos")
+                ai = request.get("ai")
+                lang = request.get("lang")
+                target = request.get("target")
+                if (lang not in ("zh", "en", "th") or
+                        target not in ("zh", "en", "th") or
+                        not all(isinstance(item, str) and 0 < len(item) <= 800
+                                for item in (source, argos, ai))):
+                    self.respond(400, {"error": "invalid translation candidates"})
+                    return
+                question = {
+                    "best": {
+                        "type": "choice",
+                        "instructions": (
+                            "Which translation best preserves the source meaning in "
+                            f"the target language ({target})? Prefer correct meaning "
+                            "over word-for-word wording."
+                        ),
+                        "criteria": {"argos": argos, "ai": ai},
+                    }
+                }
+                answer = router.predict({"source": source, "source_lang": lang,
+                                         "target_lang": target}, question,
+                                        model="multilingual")
+                choice = answer["answers"]["best"]["choice"]
+                if choice not in ("argos", "ai"):
+                    raise ValueError("invalid model choice")
+                self.respond(200, {"choice": choice})
+                return
             state = request.get("text")
             lang = request.get("lang")
             if not isinstance(state, str) or not 0 < len(state) <= 4000:

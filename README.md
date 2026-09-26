@@ -87,6 +87,13 @@ overlay, and is saved with history. It is a reading aid; it does not translate t
 choose a reply, or send anything. Treat uncertain classifications as suggestions.
 Laya analysis runs alongside translation, so its processing time does not simply
 add to the wait for the completed result.
+When both engines are available, Laya also compares their completed translations
+and suggests which one may preserve the source meaning better. Your selected
+engine remains the main translation; the other version and a copy button appear
+in the workspace. In **AI** mode, the app obtains an Argos candidate locally;
+in **Argos + AI** mode, it uses the AI translation already generated for learning.
+Both candidates and Laya's suggestion are saved in history. Check both before
+using them: the shipped Laya model can choose the wrong meaning.
 
 Laya is enabled by default. The normal launcher installs and starts its local
 Python service automatically when needed. Python 3.10+ and an internet connection

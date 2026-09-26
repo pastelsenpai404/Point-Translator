@@ -33,6 +33,9 @@ struct Translation {
     std::wstring targetLanguage = L"th";
     std::wstring engine = L"ai";
     std::wstring translated;
+    std::wstring alternativeTranslated;
+    std::wstring alternativeEngine;
+    std::wstring layaTranslationChoice;
     std::wstring original;
     std::wstring karaoke;
     std::wstring thai;
