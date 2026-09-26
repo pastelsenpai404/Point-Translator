@@ -1,6 +1,7 @@
 #include "app/overlay_application.h"
 #include "app/settings_window.h"
 #include "app/workspace_window.h"
+#include "services/laya_service.h"
 
 #include "config/app_config.h"
 #include "core/models.h"
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <future>
 #include <iterator>
 #include <memory>
 #include <sstream>
@@ -31,6 +33,7 @@ constexpr wchar_t kWindowClass[] = L"ThaiKaraokeOverlayWindow";
 constexpr wchar_t kCaptureWindowClass[] = L"ThaiKaraokeCaptureWindow";
 constexpr UINT kTrayMessage = WM_APP + 1;
 constexpr UINT kTranslationReady = WM_APP + 2;
+constexpr UINT kTranslationPreview = WM_APP + 3;
 constexpr UINT kHotkeyTranslate = 1;
 constexpr UINT kHotkeyQuit = 2;
 constexpr UINT kHotkeyOcr = 3;
@@ -151,6 +154,40 @@ void PositionAndShowOverlay() {
     InvalidateRect(g_window, nullptr, TRUE);
 }
 
+Translation TranslateWithAnalysis(const AppConfig& config, const std::wstring& original,
+                                  bool chooseOcrCandidate = false) {
+    if (!config.layaEnabled || chooseOcrCandidate) {
+        auto result = Translate(config, original, chooseOcrCandidate);
+        AnalyzeWithLaya(config, result);
+        return result;
+    }
+
+    auto analysis = std::async(std::launch::async, [config, original] {
+        Translation result;
+        result.original = original;
+        try {
+            winrt::init_apartment(winrt::apartment_type::multi_threaded);
+            try {
+                AnalyzeWithLaya(config, result);
+            } catch (...) {
+                result.layaStatus = L"Laya วิเคราะห์ไม่สำเร็จ";
+            }
+            winrt::uninit_apartment();
+        } catch (...) {
+            result.layaStatus = L"Laya วิเคราะห์ไม่สำเร็จ";
+        }
+        return result;
+    });
+    auto result = Translate(config, original);
+    const auto laya = analysis.get();
+    if (result.error.empty()) {
+        result.layaIntent = laya.layaIntent;
+        result.layaUrgency = laya.layaUrgency;
+        result.layaStatus = laya.layaStatus;
+    }
+    return result;
+}
+
 void StartTranslation(bool copySelection, std::wstring typed = {}) {
     if (g_busy.exchange(true)) return;
     KillTimer(g_window, kAutoHideTimer);
@@ -172,7 +209,18 @@ void StartTranslation(bool copySelection, std::wstring typed = {}) {
                 ? L"No text was copied. Select text in an app, then press Ctrl+Alt+T."
                 : L"The clipboard does not contain text.";
         } else {
-            *completed = Translate(config, selected);
+            winrt::init_apartment(winrt::apartment_type::multi_threaded);
+            if (config.translationEngine == L"argos" &&
+                config.sourceLanguage != config.targetLanguage) {
+                auto preview = Translate(config, selected, false, false);
+                if (preview.error.empty() && !preview.translated.empty()) {
+                    auto* early = new Translation(std::move(preview));
+                    if (!PostMessageW(g_window, kTranslationPreview, 0,
+                                      reinterpret_cast<LPARAM>(early))) delete early;
+                }
+            }
+            *completed = TranslateWithAnalysis(config, selected);
+            winrt::uninit_apartment();
         }
         if (!PostMessageW(g_window, kTranslationReady, 0,
                           reinterpret_cast<LPARAM>(completed))) {
@@ -209,14 +257,23 @@ void StartOcrTranslation(const RECT& rectangle) {
                     completed->error =
                         L"Windows OCR did not find text in the selected screen area.";
                 } else if (candidates.size() == 1) {
-                    *completed = Translate(config, candidates.front().text);
+                    if (config.translationEngine == L"argos" &&
+                        config.sourceLanguage != config.targetLanguage) {
+                        auto preview = Translate(config, candidates.front().text, false, false);
+                        if (preview.error.empty() && !preview.translated.empty()) {
+                            auto* early = new Translation(std::move(preview));
+                            if (!PostMessageW(g_window, kTranslationPreview, 0,
+                                              reinterpret_cast<LPARAM>(early))) delete early;
+                        }
+                    }
+                    *completed = TranslateWithAnalysis(config, candidates.front().text);
                 } else {
                     std::wostringstream choices;
                     for (const auto& candidate : candidates) {
                         choices << L"\n[language=" << candidate.language << L"] "
                                 << candidate.text;
                     }
-                    *completed = Translate(config, choices.str(), true);
+                    *completed = TranslateWithAnalysis(config, choices.str(), true);
                 }
                 winrt::uninit_apartment();
             } catch (const winrt::hresult_error& exception) {
@@ -358,12 +415,17 @@ void PaintOverlay(HWND window) {
         }
         if (g_config.showKaraoke) {
             DrawTextBlock(dc, L"คำอ่านคาราโอเกะภาษาไทย",
-                          g_translation.karaoke.empty() ? L"กำลังแปล…" : g_translation.karaoke,
+                          g_translation.karaoke.empty() ? (g_translation.translated.empty()?L"กำลังแปล…":L"กำลังเตรียมคำอ่าน…") : g_translation.karaoke,
                           content, RGB(92, 220, 175), RGB(255, 255, 255));
         }
         DrawTextBlock(dc, (L"คำแปล · " + g_translation.targetLanguage).c_str(), g_translation.translated +
                       (g_translation.translatedPinyin.empty()?L"":L"\nPinyin: "+g_translation.translatedPinyin), content,
                       RGB(111, 180, 255), RGB(255, 255, 255), g_translation.translatedPinyin.empty()?42:72);
+        if (!g_translation.layaIntent.empty()) {
+            DrawTextBlock(dc, L"Laya · ผลวิเคราะห์เบื้องต้น",
+                          L"เจตนา: " + g_translation.layaIntent + L" · ความเร่งด่วน: " + g_translation.layaUrgency,
+                          content, RGB(173, 195, 255), RGB(235, 237, 242), 48);
+        }
         if (g_config.showExplanation && !g_translation.explanation.empty()) {
             DrawTextBlock(dc, L"อธิบายประโยค", g_translation.explanation, content,
                           RGB(238, 191, 92), RGB(235, 237, 242), 48);
@@ -425,6 +487,7 @@ void OpenSettings() {
         return;
     }
     g_config = std::move(candidate);
+    if (g_config.layaEnabled && !previous.layaEnabled) StartLayaService();
     SetLayeredWindowAttributes(
         g_window, 0, static_cast<BYTE>(g_config.overlayOpacity * 255 / 100), LWA_ALPHA);
     if (IsWindowVisible(g_window)) PositionAndShowOverlay();
@@ -622,6 +685,14 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARA
             }
             return 0;
         }
+        case kTranslationPreview: {
+            std::unique_ptr<Translation> preview(reinterpret_cast<Translation*>(lParam));
+            if (!g_busy) return 0;
+            g_translation = std::move(*preview);
+            WorkspacePreview(g_translation);
+            if (!WorkspaceVisible()) PositionAndShowOverlay();
+            return 0;
+        }
         case kTrayMessage:
             if (lParam == WM_LBUTTONDBLCLK) ShowWorkspace();
             else if (lParam == WM_RBUTTONUP || lParam == WM_CONTEXTMENU) ShowTrayMenu(window);
@@ -670,6 +741,7 @@ int RunOverlayApplication(HINSTANCE instance) {
     g_instance = instance;
     g_config = LoadAppConfig();
     StartArgosService();
+    if (g_config.layaEnabled) StartLayaService();
     g_titleFont = CreateFontW(-15, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
                               DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                               CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");

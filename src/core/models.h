@@ -20,6 +20,7 @@ struct AppConfig {
     bool showKaraoke = true;
     bool showExplanation = true;
     bool showWordBreakdown = true;
+    bool layaEnabled = true;
     int overlayOpacity = 96;
     std::wstring overlayPosition = L"bottom";
     int autoHideSeconds = 0;
@@ -36,6 +37,9 @@ struct Translation {
     std::wstring karaoke;
     std::wstring thai;
     std::wstring explanation;
+    std::wstring layaIntent;
+    std::wstring layaUrgency;
+    std::wstring layaStatus;
     struct WordExplanation {
         std::wstring word;
         std::wstring pinyin;

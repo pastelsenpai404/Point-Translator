@@ -21,7 +21,9 @@ run it from Developer PowerShell for VS 2022:
 ```
 
 The script builds the program when necessary, creates `config.ini` on first run,
-restarts an existing process, and starts the overlay. To force a clean rebuild
+installs and starts Laya when needed, restarts an existing process, and starts the overlay.
+The first Laya setup downloads Python packages; the first analysis downloads its model.
+To force a clean rebuild
 of the executable, use `-Rebuild`.
 
 With `-Rebuild`, the existing overlay keeps running while CMake builds into a
@@ -76,17 +78,55 @@ or right-click it for the full menu.
 
 ## Point Translator workspace
 
+### Optional Laya message analysis
+
+The app can use [Laya](https://github.com/NandhaKishorM/laya) to classify the **original**
+message's intent (question, request, complaint, or statement) and urgency (normal,
+soon, or urgent). The result appears below the translation in the workspace and
+overlay, and is saved with history. It is a reading aid; it does not translate text,
+choose a reply, or send anything. Treat uncertain classifications as suggestions.
+Laya analysis runs alongside translation, so its processing time does not simply
+add to the wait for the completed result.
+
+Laya is enabled by default. The normal launcher installs and starts its local
+Python service automatically when needed. Python 3.10+ and an internet connection
+are needed for the package and first model download. To set it up separately, run:
+
+```powershell
+.\Start-Laya.ps1 -Install
+```
+
+If `py` is unavailable, the script tries the project's Argos Python environment
+and then `python` on PATH. You can also pass an installed Python executable with
+`-Python`, for example `-Python '.\.argos-venv\Scripts\python.exe'`.
+The app starts the installed service on launch. You can run `.\Start-Laya.ps1`
+manually too. The bridge listens only on `127.0.0.1:18766` and
+does not log message text. Laya runs locally and automatically picks its English
+or multilingual checkpoint. Its first use downloads model weights from Hugging
+Face and can take longer; if the service is unavailable, translation still works
+and the workspace shows a Laya status message. Turn off **ใช้ Laya วิเคราะห์เจตนา
+และความเร่งด่วน** under **Settings → Reading and learning** to disable analysis;
+`laya_enabled=false` is the equivalent `config.ini` setting. The launcher respects
+this setting and skips installation when Laya is disabled.
+
 Choose the source and target above the input: **จีน (zh)**, **อังกฤษ (en)**,
 or **ไทย (th)**. The **⇄** button swaps them. Selections persist and also apply to
 clipboard hotkeys and screen OCR. OCR requires the corresponding Windows OCR language.
 The main translation and copy button use the selected target; pronunciation and
 learning explanations stay in Thai. Suggested replies use the selected target language.
 History stores both languages, the target translation, and the engine; older Thai history remains readable.
+Chinese originals, translated results and suggested replies now display full-sentence
+Pinyin with tone marks. New history entries preserve the Pinyin; old entries without
+it remain readable and can be translated again to generate it. Argos pronunciations
+are generated locally from its exact text using pypinyin; AI results request Pinyin
+from the configured model. The existing word-by-word Pinyin remains available.
 
 Choose **AI** to use the configured model for everything, or **Argos + AI** for an
 Argos translation with AI-generated reading aids and replies. If AI is unavailable,
 the Argos translation is still displayed. Chinese ↔ English and English ↔ Thai use
 direct models; Chinese ↔ Thai uses English as an intermediate language.
+In **Argos + AI** mode, the Argos translation appears as soon as it is ready;
+the AI reading aids and suggested replies fill in when the AI request finishes.
 
 To install Argos and its four language packages once:
 
@@ -184,6 +224,9 @@ Use a new path inside the build directory, never your real history file. The che
 three replies, Thai/Chinese/emoji and escaped text persistence, clearing, corrupt-file
 preservation, HTTP errors, and providers that omit suggestions. They use a local fixture
 and do not require an API key or call an external model.
+Run `python tests/laya_bridge_tests.py` to check the bridge protocol without a model.
+With the installed Laya service running, run `build\Release\PointTranslatorLayaTests.exe`
+to check the native client against the local service.
 
 ## Configure
 

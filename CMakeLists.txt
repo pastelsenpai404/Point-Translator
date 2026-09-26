@@ -19,6 +19,8 @@ set(THAI_OVERLAY_SOURCES
     src/services/ocr_service.cpp
     src/services/translation_service.h
     src/services/translation_service.cpp
+    src/services/laya_service.h
+    src/services/laya_service.cpp
 )
 
 add_executable(ThaiKaraokeOverlay WIN32 ${THAI_OVERLAY_SOURCES})
@@ -64,10 +66,24 @@ install(FILES config.example.ini DESTINATION .)
 option(POINT_TRANSLATOR_TESTS "Build service integration tests" OFF)
 if(POINT_TRANSLATOR_TESTS)
     add_executable(PointTranslatorServiceTests tests/service_tests.cpp
-        src/services/history_service.cpp src/services/translation_service.cpp src/core/text.cpp)
+        src/services/history_service.cpp src/services/translation_service.cpp src/services/laya_service.cpp src/core/text.cpp)
     target_compile_features(PointTranslatorServiceTests PRIVATE cxx_std_20)
     target_include_directories(PointTranslatorServiceTests PRIVATE src)
     target_compile_definitions(PointTranslatorServiceTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_compile_options(PointTranslatorServiceTests PRIVATE /W4 /utf-8)
     target_link_libraries(PointTranslatorServiceTests PRIVATE windowsapp shell32 ole32 winhttp)
+    add_executable(PointTranslatorLayaTests tests/laya_service_tests.cpp
+        src/services/laya_service.cpp src/core/text.cpp)
+    target_compile_features(PointTranslatorLayaTests PRIVATE cxx_std_20)
+    target_include_directories(PointTranslatorLayaTests PRIVATE src)
+    target_compile_definitions(PointTranslatorLayaTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(PointTranslatorLayaTests PRIVATE /W4 /utf-8)
+    target_link_libraries(PointTranslatorLayaTests PRIVATE windowsapp winhttp)
+    add_executable(PointTranslatorArgosPreviewTests tests/argos_preview_tests.cpp
+        src/services/translation_service.cpp src/core/text.cpp)
+    target_compile_features(PointTranslatorArgosPreviewTests PRIVATE cxx_std_20)
+    target_include_directories(PointTranslatorArgosPreviewTests PRIVATE src)
+    target_compile_definitions(PointTranslatorArgosPreviewTests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(PointTranslatorArgosPreviewTests PRIVATE /W4 /utf-8)
+    target_link_libraries(PointTranslatorArgosPreviewTests PRIVATE windowsapp winhttp)
 endif()

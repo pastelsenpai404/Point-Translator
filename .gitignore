@@ -2,6 +2,7 @@
 /build*/
 /out/
 /.argos-venv/
+/.laya-venv/
 __pycache__/
 /cmake-build-*/
 CMakeCache.txt

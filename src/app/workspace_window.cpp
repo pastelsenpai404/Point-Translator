@@ -85,7 +85,7 @@ void Display() {
         const bool exists=static_cast<size_t>(i)<current.replies.size();
         const auto label=std::to_wstring(i+1)+L"  ·  "+(exists?current.replies[i].tone:L"คำตอบแนะนำ");
         SetWindowTextW(replyLabels[i],label.c_str());
-        SetWindowTextW(replyEdits[i],exists?(current.replies[i].text+PinyinLine(current.replies[i].pinyin)+L"\r\n\r\nคำแปล: "+current.replies[i].thai).c_str():L"ยังไม่มีคำแนะนำจากโมเดล ลองแปลใหม่ได้ครับ");
+        SetWindowTextW(replyEdits[i],exists?(current.replies[i].text+PinyinLine(current.replies[i].pinyin)+L"\r\n\r\nคำแปล: "+current.replies[i].thai).c_str():(busy?L"กำลังเตรียมคำตอบแนะนำ…":L"ยังไม่มีคำแนะนำจากโมเดล ลองแปลใหม่ได้ครับ"));
         EnableWindow(replyButtons[i],exists);
     }
     std::wstring value;
@@ -93,8 +93,13 @@ void Display() {
     else if(current.original.empty()) value=L"เริ่มต้นด้วยข้อความที่อยากเข้าใจ\r\n\r\nพิมพ์หรือวางข้อความด้านบน แล้วกด แปลข้อความ\r\nหรือเลือก จับภาพ OCR เพื่ออ่านข้อความจากหน้าจอ\r\n\r\nผลแปล คำอ่าน และคำตอบแนะนำจะปรากฏที่นี่\r\nเลือกประวัติด้านซ้ายเพื่อกลับมาอ่านได้โดยไม่ต้องแปลใหม่";
     else if(tab==2) {
         for(const auto& w:current.words) value+=w.word+L"  ·  "+w.pinyin+L"\r\nคำอ่าน: "+w.karaoke+L"\r\nความหมาย: "+w.meaning+L"\r\n"+w.note+L"\r\n\r\n";
-        if(value.empty()) value=L"โมเดลไม่ได้ส่งคำอธิบายรายคำสำหรับข้อความนี้";
-    } else value=L"ต้นฉบับ ("+LanguageName(current.sourceLanguage)+L")\r\n"+current.original+PinyinLine(current.originalPinyin)+L"\r\n\r\nคำแปล ("+LanguageName(current.targetLanguage)+L") · "+current.engine+L"\r\n"+current.translated+PinyinLine(current.translatedPinyin)+L"\r\n\r\nคำอ่านภาษาไทย\r\n"+current.karaoke+L"\r\n\r\nบริบทและความหมาย\r\n"+current.explanation;
+        if(value.empty()) value=busy?L"กำลังเตรียมคำอธิบายรายคำ…":L"โมเดลไม่ได้ส่งคำอธิบายรายคำสำหรับข้อความนี้";
+    } else {
+        value=L"ต้นฉบับ ("+LanguageName(current.sourceLanguage)+L")\r\n"+current.original+PinyinLine(current.originalPinyin)+L"\r\n\r\nคำแปล ("+LanguageName(current.targetLanguage)+L") · "+current.engine+L"\r\n"+current.translated+PinyinLine(current.translatedPinyin);
+        if (!current.layaIntent.empty()) value+=L"\r\n\r\nLaya คาดว่า · เจตนา: "+current.layaIntent+L" · ความเร่งด่วน: "+current.layaUrgency;
+        else if (!current.layaStatus.empty()) value+=L"\r\n\r\n"+current.layaStatus;
+        value+=L"\r\n\r\nคำอ่านภาษาไทย\r\n"+(busy && current.karaoke.empty()?L"กำลังเตรียม…":current.karaoke)+L"\r\n\r\nบริบทและความหมาย\r\n"+(busy && current.explanation.empty()?L"กำลังเตรียม…":current.explanation);
+    }
     SetWindowTextW(output,value.c_str());
     EnableWindow(GetDlgItem(window,CopyId),!current.translated.empty());
 }
@@ -289,6 +294,11 @@ void WorkspaceBusy(bool value) {
     SetWindowTextW(translateButton,busy?L"กำลังแปล…":L"แปลข้อความ");
     if(busy) Status(L"กำลังประมวลผล · เตรียมคำแปลและคำตอบแนะนำ…");
     else Status(L"พร้อมใช้งาน · เก็บประวัติ 500 รายการล่าสุดบนเครื่องนี้");
+}
+void WorkspacePreview(const Translation& translation) {
+    current = translation;
+    Display();
+    Status(L"แปลด้วย Argos แล้ว · กำลังเติมคำอ่านและคำตอบแนะนำจาก AI…");
 }
 void WorkspaceCompleted(const Translation& translation) {
     WorkspaceBusy(false); current=translation; Display();

@@ -102,6 +102,7 @@ try {
     $executable = Join-Path $buildDirectory 'Release\ThaiKaraokeOverlay.exe'
     $exampleConfig = Join-Path $projectDirectory 'config.example.ini'
     $runtimeConfig = Join-Path (Split-Path -Parent $executable) 'config.ini'
+    $layaScript = Join-Path $projectDirectory 'Start-Laya.ps1'
 
     if ($UseLocalAI) {
         # Ensure the executable includes the local-provider compatibility path.
@@ -262,6 +263,7 @@ Visual Studio 2022 Build Tools พร้อมเครื่องมือ C++
             'show_karaoke=true'
             'show_explanation=true'
             'show_word_breakdown=true'
+            'laya_enabled=true'
             'overlay_opacity=96'
             'overlay_position=bottom'
             'auto_hide_seconds=0'
@@ -278,6 +280,15 @@ Visual Studio 2022 Build Tools พร้อมเครื่องมือ C++
             throw 'config.ini ตั้งเป็น Local AI แต่ไม่พบ Ollama ให้รันสคริปต์พร้อม -UseLocalAI'
         }
         Start-OllamaServer -OllamaExecutable $ollama
+    }
+
+    $layaDisabled = Select-String -LiteralPath $runtimeConfig `
+        -Pattern '^\s*laya_enabled\s*=\s*(false|0|no)\s*$' -Quiet
+    if (-not $layaDisabled) {
+        if (-not (Test-Path -LiteralPath $layaScript)) {
+            throw "ไม่พบสคริปต์ติดตั้ง Laya: $layaScript"
+        }
+        & $layaScript
     }
 
     if (-not $localAIConfigured -and -not $env:THAI_OVERLAY_API_KEY) {

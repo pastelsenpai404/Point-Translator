@@ -8,6 +8,6 @@ namespace thai_overlay {
 void StartArgosService();
 
 Translation Translate(const AppConfig& config, const std::wstring& original,
-                      bool chooseOcrCandidate = false);
+                      bool chooseOcrCandidate = false, bool includeLearning = true);
 
 }  // namespace thai_overlay

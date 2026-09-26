@@ -9,6 +9,7 @@ main.cpp
        -> config/app_config
        -> services/ocr_service
        -> services/translation_service
+       -> services/laya_service (optional local message analysis)
             -> core/models + core/text
 ```
 
@@ -21,6 +22,7 @@ main.cpp
 | `app/settings_window` | Five-tab Control Center, field validation, and modal lifecycle |
 | `config/` | Loading and validating runtime configuration |
 | `services/ocr_service` | Windows OCR engines and automatic language candidates |
+| `services/laya_service` | Optional loopback call to the local Laya decision bridge |
 | `services/translation_service` | OpenAI-compatible HTTP request and response parsing |
 | `core/` | Shared domain models and encoding/text utilities |
 

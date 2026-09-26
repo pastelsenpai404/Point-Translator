@@ -219,7 +219,8 @@ void StartArgosService() {
     }
 }
 
-Translation Translate(const AppConfig& config, const std::wstring& original, bool chooseOcrCandidate) {
+Translation Translate(const AppConfig& config, const std::wstring& original,
+                      bool chooseOcrCandidate, bool includeLearning) {
     Translation result;
     result.original = original;
     result.sourceLanguage = config.sourceLanguage;
@@ -370,6 +371,7 @@ Translation Translate(const AppConfig& config, const std::wstring& original, boo
         result.originalPinyin=Utf8ToWide(originalPinyin);
         result.translatedPinyin=Utf8ToWide(translatedPinyin);
         if (config.targetLanguage == L"th") result.thai = result.translated;
+        if (!includeLearning) return result;
         AppConfig assistant = config; assistant.translationEngine = L"ai";
         const auto learning = Translate(assistant, original, false);
         if (learning.error.empty()) {

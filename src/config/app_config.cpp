@@ -74,6 +74,7 @@ AppConfig LoadAppConfig() {
         else if (key == L"show_karaoke") config.showKaraoke = ParseBoolean(value, true);
         else if (key == L"show_explanation") config.showExplanation = ParseBoolean(value, true);
         else if (key == L"show_word_breakdown") config.showWordBreakdown = ParseBoolean(value, true);
+        else if (key == L"laya_enabled") config.layaEnabled = ParseBoolean(value, true);
         else if (key == L"overlay_opacity") config.overlayOpacity = ParseInteger(value, 96, 65, 100);
         else if (key == L"overlay_position") config.overlayPosition = value;
         else if (key == L"auto_hide_seconds") config.autoHideSeconds = ParseInteger(value, 0, 0, 300);
@@ -109,6 +110,7 @@ bool SaveAppConfig(const AppConfig& config, std::wstring& error) {
             << L"show_karaoke=" << (config.showKaraoke ? L"true" : L"false") << L"\n"
             << L"show_explanation=" << (config.showExplanation ? L"true" : L"false") << L"\n"
             << L"show_word_breakdown=" << (config.showWordBreakdown ? L"true" : L"false") << L"\n"
+            << L"laya_enabled=" << (config.layaEnabled ? L"true" : L"false") << L"\n"
             << L"overlay_opacity=" << config.overlayOpacity << L"\n"
             << L"overlay_position=" << config.overlayPosition << L"\n"
             << L"auto_hide_seconds=" << config.autoHideSeconds << L"\n";

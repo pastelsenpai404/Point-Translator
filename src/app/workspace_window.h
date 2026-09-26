@@ -7,6 +7,7 @@ void InitializeWorkspace(HINSTANCE instance, AppConfig& config, std::function<vo
                          std::function<void()> capture, std::function<void()> settings);
 void ShowWorkspace();
 void WorkspaceBusy(bool busy);
+void WorkspacePreview(const Translation& translation);
 void WorkspaceCompleted(const Translation& translation);
 bool WorkspaceVisible();
 bool WorkspaceMessage(MSG& message);

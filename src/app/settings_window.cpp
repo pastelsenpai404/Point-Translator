@@ -29,6 +29,7 @@ constexpr int kShowOriginal = 2020;
 constexpr int kShowKaraoke = 2021;
 constexpr int kShowExplanation = 2022;
 constexpr int kShowWords = 2023;
+constexpr int kLayaEnabled = 2024;
 constexpr int kOpacity = 2030;
 constexpr int kOpacityValue = 2031;
 constexpr int kPosition = 2032;
@@ -192,6 +193,7 @@ bool ReadSettings(HWND window, SettingsState& state) {
     candidate.showKaraoke = Button_GetCheck(GetDlgItem(window, kShowKaraoke)) == BST_CHECKED;
     candidate.showExplanation = Button_GetCheck(GetDlgItem(window, kShowExplanation)) == BST_CHECKED;
     candidate.showWordBreakdown = Button_GetCheck(GetDlgItem(window, kShowWords)) == BST_CHECKED;
+    candidate.layaEnabled = Button_GetCheck(GetDlgItem(window, kLayaEnabled)) == BST_CHECKED;
     candidate.overlayOpacity = static_cast<int>(
         SendMessageW(GetDlgItem(window, kOpacity), TBM_GETPOS, 0, 0));
     const int position=static_cast<int>(SendMessageW(GetDlgItem(window,kPosition),CB_GETCURSEL,0,0));
@@ -272,9 +274,12 @@ void BuildReadingPage(HWND window, SettingsState& state) {
                 state.draft.showExplanation, 48, 235, 500);
     AddCheckbox(window, state, page, kShowWords, L"แสดงคำศัพท์และคำอธิบายรายคำ",
                 state.draft.showWordBreakdown, 48, 275, 500);
+    AddCheckbox(window, state, page, kLayaEnabled, L"ใช้ Laya วิเคราะห์เจตนาและความเร่งด่วน",
+                state.draft.layaEnabled, 48, 325, 560);
     AddLabel(window, state, page,
-             L"หน้าหลักยังเก็บรายละเอียดครบทุกแท็บ\nใช้ล้อเมาส์เลื่อนดูคำศัพท์ในหน้าต่างแปลได้",
-             48, 330, 600, 45);
+             L"ติดตั้ง Laya ด้วย Start-Laya.ps1 -Install ก่อนเปิดใช้\n"
+             L"ผลวิเคราะห์เป็นคำแนะนำ ไม่ใช้ส่งคำตอบอัตโนมัติ",
+             48, 370, 600, 55);
 }
 
 void BuildOcrPage(HWND window, SettingsState& state) {

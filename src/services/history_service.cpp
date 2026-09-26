@@ -49,6 +49,8 @@ std::vector<HistoryEntry> LoadHistory(std::wstring& error, std::filesystem::path
             t.translated = object.GetNamedString(L"translated", object.GetNamedString(L"thai", L""));
             t.original = Get(object, L"original"); t.thai = Get(object, L"thai");
             t.karaoke = Get(object, L"karaoke"); t.explanation = Get(object, L"explanation");
+            t.layaIntent = Get(object, L"laya_intent");
+            t.layaUrgency = Get(object, L"laya_urgency");
             for (const auto& item : object.GetNamedArray(L"words", JsonArray())) {
                 const auto w = item.GetObject();
                 t.words.push_back({Get(w,L"word"),Get(w,L"pinyin"),Get(w,L"karaoke"),Get(w,L"meaning"),Get(w,L"note")});
@@ -79,6 +81,7 @@ bool SaveHistory(const std::vector<HistoryEntry>& entries, std::wstring& error, 
             Put(object,L"engine",t.engine); Put(object,L"translated",t.translated);
             Put(object,L"time",entry.time); Put(object,L"original",t.original);
             Put(object,L"thai",t.thai); Put(object,L"karaoke",t.karaoke); Put(object,L"explanation",t.explanation);
+            Put(object,L"laya_intent",t.layaIntent); Put(object,L"laya_urgency",t.layaUrgency);
             JsonArray words, replies;
             for (const auto& w : t.words) {
                 JsonObject item;
